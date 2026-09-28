@@ -67,6 +67,16 @@
     font-size: 0.88em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -107,78 +117,90 @@
 <main>
 
 <h1>Skill Pipeline'ıyla İçerik Otomasyonu Kurma Rehberi</h1>
-<div class="byline">23 Eylül 2026 · Mehmet Buğra Kara</div>
+<div class="byline">Mehmet Buğra Kara</div>
 
-<p class="lead">Bu doküman, ham veriden yayına hazır içeriğe kadar giden bir otomasyonun nasıl küçük, tek sorumluluklu "skill"lere bölünerek kurgulandığını anlatır, Chief Scout (futbol istatistik içeriği) üzerinden, ama yöntem herhangi bir veri odaklı içerik hattına taşınabilir.</p>
+<p class="lead">Bu doküman, ham veriden yayına hazır içeriğe (analiz, anlatım metni, video, interaktif panel) kadar giden bir otomasyonun, küçük ve tek sorumluluklu "skill"lere bölünerek nasıl kurgulanabileceğini anlatır. Anlatılan yapı belirli bir konuya bağlı değil: istatistik, finans, e-ticaret, spor ya da herhangi bir veri odaklı içerik hattına uygulanabilir.</p>
 
 <h2>Neden tek dev script değil, skill zinciri</h2>
-<p>İlk deneme tek bir uçtan uca script'ti: veriyi çek, işle, analiz et, metni yaz, videoyu render et, hepsi aynı dosyada. İki sorunu vardı: bir adımda hata çıkınca nerede bozulduğunu bulmak zor oluyordu, ve her adımın kendi "doğruluk kontrolü" gerekiyordu ama tek script içinde bu kontroller birbirine karışıyordu.</p>
-<p>Çözüm: her aşamayı ayrı bir <strong>skill</strong>'e ayırmak. Skill burada "tek sorumluluğu olan, net girdi/çıktı sözleşmesi olan, kendi başına test edilebilen bir prosedür" anlamına geliyor: bir fonksiyon gibi ama insan dilinde tarif edilmiş, LLM'in izlediği bir talimat seti.</p>
-<p>Kural şu: <strong>bir skill'in çıktısı, bir sonrakinin girdisidir ve o girdinin şekli sabittir.</strong> Veri toplama skill'i her zaman aynı formatta ham veri bırakır; feature üretimi her zaman aynı şemada final tablo üretir; analiz skill'i her zaman aynı iskelette (bulgu + doğrulama + anlatım metni) çıktı verir. Bu sabitlik sayesinde bir aşamayı tek başına değiştirebiliyorsun, mesela video render motorunu değiştirsen, analiz skill'inin hiçbir satırına dokunmuyorsun.</p>
-<p>İkinci kural: <strong>her skill, kendinden önceki oturumlarda yaşanmış somut hatayı dokümante eder.</strong> Skill dosyaları soyut "best practice" değil, "bu şu tarihte şöyle bozuldu, bir daha olmasın" notları taşıyor. Aşağıdaki bölümlerde bu hatalardan birkaçı somut örnek olarak geçiyor.</p>
+<p>İlk akla gelen çözüm genelde tek bir uçtan uca script olur: veriyi çek, işle, analiz et, metni yaz, videoyu render et, hepsi aynı dosyada. Bunun iki sorunu var: bir adımda hata çıkınca nerede bozulduğunu bulmak zorlaşır, ve her adımın kendi doğruluk kontrolü gerekir ama tek script içinde bu kontroller birbirine karışır.</p>
+<p>Çözüm: her aşamayı ayrı bir <strong>skill</strong>'e ayırmak. Skill burada "tek sorumluluğu olan, net girdi/çıktı sözleşmesi olan, kendi başına test edilebilen bir prosedür" anlamına geliyor. Bir fonksiyon gibi, ama insan dilinde tarif edilmiş ve bir LLM ajanının (Claude Code, Gemini CLI vb.) izlediği bir talimat seti.</p>
+<p>Kural şu: <strong>bir skill'in çıktısı, bir sonrakinin girdisidir ve o girdinin şekli sabittir.</strong> Veri toplama skill'i her zaman aynı formatta ham veri bırakır; işleme skill'i her zaman aynı şemada final tablo üretir; analiz skill'i her zaman aynı iskelette (bulgu + doğrulama + anlatım metni) çıktı verir. Bu sabitlik sayesinde bir aşamayı tek başına değiştirebilirsin: video render motorunu değiştirsen bile analiz skill'inin hiçbir satırına dokunmazsın.</p>
+<p>İkinci kural: <strong>her skill, geçmiş oturumlarda yaşanmış somut hataları dokümante eder.</strong> Skill dosyaları soyut "best practice" listesi değil, "şu adımda şöyle bozuldu, bir daha olmasın" notları taşır. Aşağıdaki bölümlerde bu tür hatalardan örnekler var.</p>
 
-<h2>Aşama 1: Veri toplama (<code>whoscored-cek</code>)</h2>
-<p>Kaynak seçimi kararla başladı: WhoScored event-log seviyesinde (her pas, her şut, her top kapma ayrı satır) veri veriyor, bu da lig ortalamasının ötesinde "kim, ne zaman, sahanın neresinde" sorusuna cevap veriyor. Buna karşılık kaynak kararlı değil: bazı ağlardan sahte SSL sertifikasıyla engelleniyor. Skill bu gerçeği kabul edip fallback tanımlıyor: birincil kaynak tıkanırsa FBref/Understat'a düş.</p>
-<p>İkinci tasarım kararı: <strong>sezon algılamayı elle yaptırma.</strong> İlk sürümde hangi sezonun çekileceği elle giriliyordu; sezon geçişinde (Mayıs→Ağustos) unutulup eski sezona veri yazılma riski vardı. Skill artık son maç tarihine bakarak hangi sezonda olduğunu kendisi çıkarıyor. Haftalık otomasyonun insansız çalışabilmesinin ön koşulu bu.</p>
-<p>Üçüncü karar: bu skill <strong>sadece çeker, işlemez.</strong> Çıktısı ham <code>raw_events/*.feather</code> dosyaları. İşleme mantığını buraya karıştırmamak bilinçli: kaynak site yapısı değiştiğinde sadece bu skill'e dokunuluyor, aşağıdaki hiçbir katman etkilenmiyor.</p>
+<p>Genel akış şöyle:</p>
+<pre>veri-cek  →  veri-isle  →  analiz + anlatım  →  video / animasyon
+    └──────── haftalık zincir ───────┘                  └→ interaktif paneller (paralel kol)</pre>
 
-<h2>Aşama 2: Ham veriden final tabloya (<code>veri-uret</code>, <code>veri-ekle</code>)</h2>
-<p>Bu aşama pipeline'ın en fazla hata verdiği yer oldu, o yüzden en katı kurallar burada. Aynı oturumda tekrarlanan üç farklı şekilde dosya bozulması (0 byte'a düşen tablolar) yaşandı:</p>
+<h2>Aşama 1: Veri toplama</h2>
+<p>İlk karar kaynak seçimi. Özet istatistik veren kaynaklar kolaydır ama derinlik sınırlıdır; olay seviyesinde (her işlem, her etkileşim ayrı satır) veri veren kaynaklar ise "kim, ne zaman, nerede" sorularına cevap verir. Derin kaynaklar genelde daha kırılgandır: erişim engeli, oran sınırı, yapı değişikliği. Skill bu gerçeği baştan kabul edip <strong>fallback tanımlamalı</strong>: birincil kaynak tıkanırsa daha sığ ama erişilebilir ikincil kaynağa düş.</p>
+<p>İkinci tasarım kararı: <strong>dönem algılamayı elle yaptırma.</strong> Hangi dönemin (sezon, çeyrek, ay) çekileceği elle girilirse dönem geçişinde unutulur ve yeni veri eski döneme yazılır. Skill son kaydın tarihine bakarak hangi dönemde olduğunu kendisi çıkarmalı. Haftalık otomasyonun insansız çalışabilmesinin ön koşulu bu.</p>
+<p>Üçüncü karar: bu skill <strong>sadece çeker, işlemez.</strong> Çıktısı ham dosyalardır. İşleme mantığını buraya karıştırmamak bilinçli bir seçim: kaynağın yapısı değiştiğinde sadece bu skill'e dokunulur, aşağıdaki hiçbir katman etkilenmez.</p>
+
+<h2>Aşama 2: Ham veriden final tabloya</h2>
+<p>Pipeline'ın en çok hata veren yeri genelde burasıdır, o yüzden en katı kurallar burada olmalı. Tablo büyütülürken sık görülen üç bozulma türü ve her birinden çıkan kural:</p>
 <table>
 <tr><th>Hata</th><th>Sebep</th><th>Çıkan kural</th></tr>
-<tr><td>Dtype çakışması</td><td>Yeni satırlar farklı tipte kolon getirdi, Arrow/feather yazımı çöktü</td><td>Ekleme öncesi kolon tiplerini eski tabloyla karşılaştır, uyuşmuyorsa önce düzelt</td></tr>
-<tr><td>İsim çakışması</td><td>Aynı isimli farklı iki oyuncu tek kişi sanılıp birleştirildi</td><td>Merge her zaman ID üzerinden, isim üzerinden asla</td></tr>
-<tr><td>Yarım yazma</td><td>Script yarıda kesildi, tablo bozuk halde kaldı</td><td>Önce geçici dosyaya yaz, doğrula, sonra asıl dosyanın üzerine taşı</td></tr>
+<tr><td>Tip çakışması</td><td>Yeni satırlar aynı kolonu farklı tipte getirir, dosya yazımı çöker</td><td>Ekleme öncesi kolon tiplerini mevcut tabloyla karşılaştır, uyuşmuyorsa önce düzelt</td></tr>
+<tr><td>İsim çakışması</td><td>Aynı isimli iki farklı kayıt tek kayıt sanılıp birleştirilir</td><td>Birleştirme her zaman benzersiz ID üzerinden, isim üzerinden asla</td></tr>
+<tr><td>Yarım yazma</td><td>Script yarıda kesilir, tablo bozuk (hatta 0 byte) kalır</td><td>Önce geçici dosyaya yaz, doğrula, sonra asıl dosyanın üzerine taşı</td></tr>
 </table>
-<p>Bu üç kural <code>/veri-ekle</code> skill'inin çekirdeği oldu. Artık her ekleme bu sırayı zorunlu izliyor.</p>
-<p>Daha derin bir ders, sonraki bir denetim turunda çıktı: <strong>pipeline <code>tm_player_id</code> üzerinden birleştirip <code>whoscored_player_id</code> üzerinden filtreliyordu</strong>: iki farklı ID sistemi arasındaki uyumsuzluk yüzde 68 eşleşme oranına düşmüş, eşleşemeyen oyuncular sessizce varsayılan değerlerle (pozisyon: orta saha, piyasa değeri: varsayılan) dolduruluyordu. Ders: <strong>bir merge zincirinde tek bir ID standardına sadık kal</strong>, karışık ID kullanımı veri kalitesini sessizce bozar: hata mesajı vermez, sadece yanlış sonuç üretir.</p>
-<p>Benzer şekilde yüzde paylaşımı (percentile) hesabında invert bayrağı (düşük değerin iyi sayıldığı metrikler) görselde doğru uygulanıp asıl sıralama hesabına yansımamıştı. Kullanıcı arayüzü doğru görünüp altındaki veri yanlış olabiliyor, bu yüzden doğrulama her zaman ham veriye karşı yapılıyor, ekrana değil.</p>
+<p>Bu üç kural, veri ekleme skill'inin çekirdeği olmalı ve her ekleme bu sırayı zorunlu izlemeli.</p>
+<p>Daha sinsi bir hata sınıfı: <strong>birleştirmeyi bir ID sistemiyle yapıp filtrelemeyi başka bir ID sistemiyle yapmak.</strong> İki farklı kaynaktan gelen ID'ler arasındaki eşleşme oranı düşükse, eşleşemeyen kayıtlar sessizce varsayılan değerlerle doldurulur. Hata mesajı çıkmaz, sadece yanlış sonuç üretilir. Ders: <strong>bir birleştirme zincirinde tek bir ID standardına sadık kal</strong> ve eşleşme oranını her çalıştırmada raporla.</p>
+<p>Benzer şekilde, "düşük değerin iyi sayıldığı" metrikler için ters çevirme mantığı görselde doğru uygulanıp asıl sıralama hesabına yansımayabilir. Arayüz doğru görünürken altındaki veri yanlış olabilir. Bu yüzden <strong>doğrulama her zaman ham veriye karşı yapılmalı, ekrana karşı değil.</strong></p>
 
-<h2>Aşama 3: Haftalık zincirleme otomasyon (<code>haftalik-veri-guncelle</code>)</h2>
-<p>İlk iki aşama tek başına çalışıyor ama her hafta elle çağırılması gerekiyordu. Çözüm yeni bir şey hesaplamak değil, var olan iki skill'i <strong>sabit sırayla zincirlemek</strong>: önce <code>whoscored-cek</code> yeni maç var mı diye bakıyor, varsa çekiyor; ardından <code>veri-uret</code> o ham veriyi final tablolara işliyor.</p>
-<p>Buradaki tasarım kararı şu: <strong>zincirleyen skill kendi mantığını taşımaz, sadece sırayı ve koşulu bilir.</strong> "Yeni maç yoksa dur", "veri-uret'i veri çekilmeden çalıştırma" gibi kurallar burada, ama hesaplama mantığının kendisi hep alt katmanlarda kalıyor. Bu sayede zincirleme skill çok kısa ve kırılgan olmayan bir dosya: alt katmanlardan biri değişse bile zincirleme mantığı aynı kalıyor.</p>
+<h2>Aşama 3: Zincirleme otomasyon</h2>
+<p>İlk iki aşama tek başına çalışır ama her seferinde elle çağırılması gerekir. Çözüm yeni bir şey hesaplamak değil, var olan iki skill'i <strong>sabit sırayla zincirlemek</strong>: önce çekme skill'i yeni veri var mı diye bakar, varsa çeker; ardından işleme skill'i o ham veriyi final tablolara işler. Bu zincir zamanlanmış bir görev olarak haftalık çalıştırılabilir.</p>
+<p>Tasarım kararı: <strong>zincirleyen skill kendi hesaplama mantığını taşımaz, sadece sırayı ve koşulu bilir.</strong> "Yeni veri yoksa dur", "çekme başarısızsa işlemeyi çalıştırma" gibi kurallar burada durur, ama hesaplamanın kendisi hep alt katmanlarda kalır. Böylece zincirleme skill kısa ve kırılgan olmayan bir dosya olur: alt katmanlardan biri değişse bile zincir aynı kalır.</p>
 
-<h2>Aşama 4: Analiz ve doğrulama disiplini (<code>futbol-analiz</code>)</h2>
-<p>Bu, pipeline'ın en önemli aşaması, çünkü burada verilen yanlış karar, doğru kodla bile yanlış içerik üretir. Üç tasarım kararı öne çıkıyor:</p>
-<p><strong>Baseline seçimi.</strong> Çarpıcı bir sayı neye kıyasla çarpıcı? Bu projede yaşanmış somut hata: bir hakemin yönettiği maçlarda dağılan puan ortalaması, "lig geneli ortalama"yla kıyaslandı. Sorun şu: bir maçta dağıtılan puan ya 2 (berabere) ya 3'tür (kesin sonuç), bu yüzden bu ortalama <strong>hangi hakem olursa olsun matematiksel olarak 1.3-1.45 aralığına yakınsar</strong>: hakem hakkında hiçbir şey söylemez, sadece ligin beraberlik oranını yansıtır. Buradan çıkan genel kural: <strong>baseline seçmeden önce sor: bu sayı özneden bağımsız olarak zaten sabit bir değere mi yakınsuyor? Cevap evetse o baseline ölüdür, öznenin kendi ortalamasını kullan.</strong></p>
-<p><strong>Örneklem eşiği.</strong> Küçük örneklemli bulgular (N&lt;5) tek başına hook yapılmıyor; N≥15 "sağlam" sayılıyor. Bu eşik keyfi değil: yüzde paylaşım hesabında keşfedilen başka bir hatadan geliyor: minimum süre filtresi olmadan hesaplanan sıralamalarda 650 oyuncu 90 dakikadan az süreyle listeye girmiş, üst sıraları anlamsız hale getirmişti.</p>
-<p><strong>Alternatif açıklama testi.</strong> Bir sayı çarpıcı görününce, veriyle test edilebilir başka bir açıklaması var mı diye bakılıyor: derbi karması, ev/deplasman dağılımı, dönemsellik, takımın zaten baskın oynayıp oynamadığı. Bu test iki türlü bitiyor: açıklama tutuyorsa dürüstçe söyleniyor ("bu sayı anlaşılır çünkü yönettiği maçların çoğu derbi"), tutmuyorsa <strong>asıl bulgu orada</strong> ortaya çıkıyor. Bu adım atlanırsa çıkan metin gazetecilik değil, tesadüfleri manşet yapan bir ürün oluyor.</p>
+<h2>Aşama 4: Analiz ve doğrulama disiplini</h2>
+<p>Pipeline'ın en önemli aşaması burası, çünkü burada verilen yanlış karar, doğru kodla bile yanlış içerik üretir. Üç tasarım kararı öne çıkıyor:</p>
+<p><strong>Baseline seçimi.</strong> Çarpıcı bir sayı neye kıyasla çarpıcı? Sık yapılan hata: yapısı gereği dar bir aralığa sıkışan bir ortalamayı genel ortalamayla kıyaslamak. Örneğin her olayda yalnızca 2 ya da 3 değerini alabilen bir ölçünün ortalaması, özne kim olursa olsun 2 ile 3 arasında dar bir banda yakınsar. Bu kıyas özne hakkında hiçbir şey söylemez, sadece sistemin genel dağılımını yansıtır. Genel kural: <strong>baseline seçmeden önce sor: bu sayı özneden bağımsız olarak zaten sabit bir değere mi yakınsıyor? Cevap evetse o baseline ölüdür, başka bir kıyas noktası seç.</strong></p>
+<p><strong>Örneklem eşiği.</strong> Az gözleme dayanan bulgular tek başına manşet yapılmamalı, mutlaka örneklem uyarısıyla verilmeli. Eşiği önceden sabitle (örneğin 5 altı "kullanma", 15 üstü "sağlam"). Eşik olmadan hesaplanan sıralamalarda, çok az gözlemi olan yüzlerce kayıt uç değerleriyle üst sıraları doldurur ve listeyi anlamsız hale getirir.</p>
+<p><strong>Alternatif açıklama testi.</strong> Bir sayı çarpıcı görününce, veriyle test edilebilir başka bir açıklaması var mı diye bakılmalı: karışım etkisi (öznenin karşılaştığı durumların dağılımı farklı mı?), dönemsellik, ev/dış ya da benzeri bağlam farkları, öznenin zaten baskın olduğu bir alan olup olmadığı. Bu test iki türlü biter: açıklama tutuyorsa dürüstçe söylenir ("bu sayı anlaşılır, çünkü..."), tutmuyorsa <strong>asıl bulgu orada</strong> ortaya çıkar. Bu adım atlanırsa üretilen içerik tesadüfleri manşet yapar.</p>
 <p>Genel prensip: <strong>iddia her zaman sayıya bağlı olmalı, sayı doğrulanmadan metne girmemeli.</strong></p>
 
 <h2>Aşama 5: Kendi anlatım sesini kodlamak</h2>
-<p>Doğrulanmış bulgular tablodan çıktığında hala "kimin sesi" belli değil. Çözüm, sesi bir kerede prompt'a yazmak yerine <strong>ayrı bir referans dosyasında</strong> (<code>references/anlatim-dili.md</code>) sabitlemek oldu: skill her çalıştığında o dosyayı metni yazmadan önce okuyor.</p>
-<p>Bu dosyada somut, kopyalanabilir kalıplar var: sahiplenici dil ("hakemimiz", "ligimizde", "takımımız"), geçiş kalıpları ("Burada asıl dikkat çeken kısım..."), muhalif sesi karşılayan kalıp ("...diyenleri duyar gibiyim, peki bunları da incelediğimizde"), yumuşak kapanış ("gibi gözüküyor", nedensellik iddia etmeden). Aynı zamanda katı sınırlar da var: bahis dili tamamen yasak (oran, kupon, "kim kazanır" yok), hook her zaman ifade, soru değil, yuvarlak sayı yerine spesifik sayı.</p>
-<p>Buradaki genel prensip: <strong>ses, başka bir veri kaynağı gibi versiyonlanan, ayrı bir dosya.</strong> Başka biri kendi içerik hattını kurarken bu adımı atlayıp sesi her seferinde prompt içine yazarsa, ton oturumdan oturuma kayar. Sabit dosya bu kaymayı önlüyor.</p>
+<p>Doğrulanmış bulgular tablodan çıktığında hala "kimin sesi" belli değil. Çözüm, sesi her seferinde prompt'a yazmak yerine <strong>ayrı bir referans dosyasında</strong> (örneğin <code>references/anlatim-dili.md</code>) sabitlemek: skill her çalıştığında metni yazmadan önce o dosyayı okur.</p>
+<p>Bu dosyada soyut sıfatlar ("samimi ol", "akıcı yaz") değil, somut ve kopyalanabilir kalıplar olmalı:</p>
+<ul>
+<li><strong>Hitap ve sahiplenme:</strong> izleyiciyle kurduğun ilişkiyi yansıtan kelimeler.</li>
+<li><strong>Geçiş kalıpları:</strong> bulgudan bulguya geçerken kullandığın sabit ifadeler ("Burada asıl dikkat çeken kısım...").</li>
+<li><strong>Karşı görüşü karşılama:</strong> olası itirazı dile getirip veriyle cevaplayan kalıp.</li>
+<li><strong>Kapanış tonu:</strong> nedensellik iddia etmeden, ölçülü bitiş ("gibi gözüküyor").</li>
+<li><strong>Katı sınırlar:</strong> hiç girilmeyecek konu ve dil alanları, hook'un soru değil ifade olması, yuvarlak değil spesifik sayı kullanımı.</li>
+</ul>
+<p>Buradaki prensip: <strong>ses, başka bir veri kaynağı gibi versiyonlanan ayrı bir dosyadır.</strong> Ses her seferinde prompt içinde yeniden tarif edilirse ton oturumdan oturuma kayar. Sabit dosya bu kaymayı önler ve gerçek metinlerinden örneklerle zamanla zenginleştirilebilir.</p>
 
-<h2>Aşama 6: Video/animasyon katmanı: iki aracın birlikte kullanılması</h2>
-<p>Anlatım metni hazır olduğunda tek bir video motoru yeterli değildi: ihtiyaç hıza göre ikiye ayrıldı:</p>
+<h2>Aşama 6: Video ve animasyon katmanı</h2>
+<p>Anlatım metni hazır olduğunda tek bir video motoru genelde yetmez: ihtiyaç hıza ve kaliteye göre katmanlara ayrılır.</p>
 <table>
-<tr><th>Katman</th><th>Araç</th><th>Ne zaman kullanılır</th></tr>
-<tr><td>Temel istatistik videosu</td><td><code>istatistik-video</code> (Claude Code)</td><td>Hızlı üretim: satır vurgulama, sayaç, bar sahneleri, tek script render</td></tr>
-<tr><td>Sinematik/hareketli versiyon</td><td><code>istatistik-video-motion</code> (Gemini CLI)</td><td>Bridge Zoom, Spotlight, Duel gibi daha karmaşık sahne türleri gerektiğinde</td></tr>
-<tr><td>Yayıncılık kalite sunum</td><td><code>futbol-ustadi-sunum</code> (Remotion, Gemini CLI)</td><td>Resmi kulüp logoları, çok metrikli delta karşılaştırması gereken özel içerikler</td></tr>
-<tr><td>Bölüm geçişleri</td><td><code>bolum-animasyonu</code> (Gemini CLI)</td><td>Uzun videolarda chapter/bumper arayüzü</td></tr>
+<tr><th>Katman</th><th>Tipik araç</th><th>Ne zaman kullanılır</th></tr>
+<tr><td>Temel istatistik videosu</td><td>Şablon tabanlı HTML/Canvas render</td><td>Hızlı üretim: satır vurgulama, sayaç, bar sahneleri, tek komutla render</td></tr>
+<tr><td>Sinematik/hareketli versiyon</td><td>Daha zengin sahne kütüphanesi olan motion motoru</td><td>Yakınlaştırma, spot ışığı, karşılaştırma gibi karmaşık sahne türleri gerektiğinde</td></tr>
+<tr><td>Yayın kalitesinde sunum</td><td>Remotion gibi kod tabanlı video çatıları</td><td>Marka öğeleri, çok metrikli karşılaştırma gereken vitrin içerikler</td></tr>
+<tr><td>Bölüm geçişleri</td><td>Kısa bumper/intro şablonları</td><td>Uzun videolarda bölüm arayüzü</td></tr>
 </table>
-<p>İki farklı aracın (Claude Code + Gemini CLI) aynı pipeline'da bulunmasının sebebi rekabet değil, <strong>ihtiyaca göre katman seçimi</strong>: günlük/hızlı içerik için temel motor yeterli, özel/vitrin içerik için daha ağır sinematik motor devreye giriyor. Her iki katman da aynı girdiyi (aşama 4-5'ten çıkan anlatım metni + doğrulanmış tablo) okuyor, bu yüzden hangisi seçilirse seçilsin üst katmanlara dokunulmuyor.</p>
-<p>Ayrıca paralel bir kol: yeni maç verisi geldikçe <code>mac-ici-aksiyon-haritasi</code>, <code>saha-analiz-html-guncelle</code> ve <code>studyo-html-guncelle</code> skill'leri interaktif HTML panellerini (saha aksiyon haritası, Futbol Üstadı Analiz Stüdyosu) otomatik güncelliyor, bu video üretiminden bağımsız, sürekli açık kalan bir dashboard katmanı.</p>
+<p>Farklı araçların (hatta farklı ajanların, örneğin Claude Code ve Gemini CLI) aynı pipeline'da bulunabilmesinin sebebi <strong>ihtiyaca göre katman seçimi</strong>: günlük/hızlı içerik için temel motor yeterli, özel içerik için daha ağır motor devreye girer. Tüm katmanlar aynı girdiyi (aşama 4-5'ten çıkan anlatım metni ve doğrulanmış tablo) okur, bu yüzden hangisi seçilirse seçilsin üst katmanlara dokunulmaz.</p>
+<p>Paralel bir kol olarak, yeni veri geldikçe interaktif HTML panelleri (haritalar, karşılaştırma ekranları, radar grafikler) güncelleyen ayrı skill'ler de eklenebilir. Bu kol video üretiminden bağımsız, sürekli açık kalan bir dashboard katmanıdır.</p>
 
 <h2>Genel dersler: kendi pipeline'ını kurmak istersen</h2>
-<p>Bu yöntem futbol verisine özgü değil; herhangi bir veri → içerik hattına taşınır. Çıkarılan prensipleri sırayla uygularsan:</p>
+<p>Çıkarılan prensipleri sırayla uygularsan herhangi bir veri → içerik hattını bu yapıda kurabilirsin:</p>
 <ol>
 <li><strong>Her aşamayı ayrı bir skill'e ayır</strong>, girdi/çıktı şeklini sabitle. Bir aşamayı değiştirdiğinde diğerlerine dokunmamalısın.</li>
 <li><strong>Ham çekme ile işleme mantığını aynı skill'e koyma.</strong> Kaynak değiştiğinde (site yapısı, API) sadece çekme katmanı değişmeli.</li>
-<li><strong>Geçmiş hataları skill dosyasına yaz</strong>, soyut kural değil. "Bu tarihte bu şekilde bozuldu" notu, aynı hatanın tekrarını önlüyor: gelecekteki oturum aynı hatayı tekrar keşfetmek zorunda kalmıyor.</li>
-<li><strong>Merge/birleştirme her zaman ID üzerinden, isim veya metin eşleştirmesiyle asla.</strong> İsim çakışması sessiz ve tehlikeli bir hata sınıfı.</li>
-<li><strong>Baseline'ı seçmeden önce test et:</strong> bu kıyas noktası özneden bağımsız olarak sabit bir değere mi yakınsıyor? Evetse o baseline'ı kullanma.</li>
-<li><strong>Çarpıcı her sayıyı, metne girmeden önce alternatif açıklamaya karşı test et.</strong> Bu adım atlanırsa üretilen içerik tesadüfleri bulgu sanır.</li>
-<li><strong>Ses/ton'u ayrı bir referans dosyasında sabitle</strong>, her seferinde prompt'a yeniden yazma. Ton, versiyonlanan bir varlık gibi ele alınırsa oturumdan oturuma kaymaz.</li>
-<li><strong>Zincirleme (orchestration) skill'i, mantık taşımasın</strong>, sadece sırayı ve koşulu bilsin. Hesaplama mantığı hep alt katmanda kalır, böylece zincir kırılgan olmaz.</li>
-<li><strong>Ara katmanlarda hız/kalite seçeneği bırak</strong> (bu projede temel video motoru vs. sinematik motor gibi), her içerik aynı ağırlıkta olmak zorunda değil.</li>
+<li><strong>Geçmiş hataları skill dosyasına yaz</strong>, soyut kural olarak değil. "Bu adımda şu şekilde bozuldu" notu, gelecekteki oturumun aynı hatayı tekrar keşfetmesini önler.</li>
+<li><strong>Birleştirme her zaman ID üzerinden, isim veya metin eşleştirmesiyle asla.</strong> Tek bir ID standardına sadık kal, eşleşme oranını raporla.</li>
+<li><strong>Baseline'ı seçmeden önce test et:</strong> bu kıyas noktası özneden bağımsız olarak sabit bir değere mi yakınsıyor? Evetse kullanma.</li>
+<li><strong>Örneklem eşiğini önceden sabitle</strong>, küçük örneklemli bulguyu uyarısız yayınlama.</li>
+<li><strong>Çarpıcı her sayıyı, metne girmeden önce alternatif açıklamaya karşı test et.</strong></li>
+<li><strong>Ses/tonu ayrı bir referans dosyasında sabitle</strong>, her seferinde prompt'a yeniden yazma.</li>
+<li><strong>Zincirleme skill mantık taşımasın</strong>, sadece sırayı ve koşulu bilsin.</li>
+<li><strong>Üretim katmanında hız/kalite seçeneği bırak</strong>, her içerik aynı ağırlıkta olmak zorunda değil.</li>
 </ol>
 
 <p class="closing">Sonuç: veriden içeriğe giden hat, tek büyük ve kırılgan bir script değil, her biri kendi hatasından ders çıkarmış, birbirine sabit sözleşmelerle bağlı küçük parçaların toplamı.</p>
 
-<footer>Chief Scout içerik otomasyonu &mdash; Mehmet Buğra Kara</footer>
+<footer>Mehmet Buğra Kara</footer>
 
 </main>
 </body>
